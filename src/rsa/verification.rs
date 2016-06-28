@@ -62,10 +62,28 @@ rsa_pkcs1!(RSA_PKCS1_3072_8192_SHA384, 3072, &super::RSA_PKCS1_SHA384,
            "Verification of signatures using RSA keys of 3072-8192 bits,
             PKCS#1.5 padding, and SHA-384.");
 
-fn verify_rsa(params: &RSAParameters,
-              (n, e): (untrusted::Input, untrusted::Input),
-              msg: untrusted::Input, signature: untrusted::Input)
-              -> Result<(), error::Unspecified> {
+/// Lower-level API for the verification of RSA signatures.
+///
+/// When the public key is in DER-encoded PKCS#1 ASN.1 format, it is
+/// recommended to use `ring::signature::verify()` with
+/// `ring::signature::RSA_PKCS1_*`, because `ring::signature::verify()`
+/// will handle the parsing in that case. Otherwise, this function can be used
+/// to pass in the raw bytes for the public key components as
+/// `untrusted::Input` arguments.
+///
+/// `params` determine what algorithm parameters (padding, digest algorithm,
+/// key length range, etc.) are used in the verification. `n` is the public key
+/// modulus and `e` is the public key exponent. `msg` is the message and
+/// `signature` is the signature.
+//
+// The test coverage for this function almost completely depends on the test
+// coverage for the `signature::VerificationAlgorithm` implementation for
+// `RSAParameters`. If we change that, test coverage for `verify_rsa()` will
+// need to be reconsidered.
+pub fn verify_rsa(params: &RSAParameters,
+                  (n, e): (untrusted::Input, untrusted::Input),
+                  msg: untrusted::Input, signature: untrusted::Input)
+                  -> Result<(), error::Unspecified> {
     const MAX_BITS: usize = 8192;
 
     let signature = signature.as_slice_less_safe();
