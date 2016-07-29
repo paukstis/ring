@@ -131,22 +131,17 @@ pub mod constant_time;
 #[doc(hidden)]
 pub mod der;
 
-#[cfg(feature = "asm")]
 #[path = "digest/digest.rs"]
 pub mod digest;
 
 #[cfg(feature = "asm")]
 #[path = "ec/ec.rs"] mod ec;
 
-#[cfg(feature = "asm")]
 pub mod hkdf;
-
-#[cfg(feature = "asm")]
 pub mod hmac;
 
 mod init;
 
-#[cfg(feature = "asm")]
 pub mod pbkdf2;
 
 pub mod rand;
