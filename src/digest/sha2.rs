@@ -109,7 +109,7 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
         let mut g = state[6];
         let mut h = state[7];
 
-        for t in 0..64 {
+        for t in 0..16 {
             let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + w[t];
 
             let t2 = big_s0_256(a) + maj!(a,b,c);
@@ -122,6 +122,20 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
             b = a;
             a = t1 + t2;
         }
+        for t in 16..64 {
+            let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + w[t];
+
+            let t2 = big_s0_256(a) + maj!(a,b,c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
+        }
+
         state[0] = a + state[0];
         state[1] = b + state[1];
         state[2] = c + state[2];
@@ -161,7 +175,7 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
         let mut g = state[6];
         let mut h = state[7];
 
-        for t in 0..80 {
+        for t in 0..16 {
             let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + w[t];
 
             let t2 = big_s0_512(a) + maj!(a,b,c);
@@ -174,6 +188,21 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
             b = a;
             a = t1 + t2;
         }
+
+        for t in 16..80 {
+            let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + w[t];
+
+            let t2 = big_s0_512(a) + maj!(a,b,c);
+            h = g;
+            g = f;
+            f = e;
+            e = d + t1;
+            d = c;
+            c = b;
+            b = a;
+            a = t1 + t2;
+        }
+
         state[0] = a + state[0];
         state[1] = b + state[1];
         state[2] = c + state[2];
