@@ -22,6 +22,14 @@
 //! <table>
 //! <tr><th>Feature
 //!     <th>Description
+//! <tr><td><code>asm</code>
+//!     <td>By default optimized assembly-language implementations of the
+//!         crypto primitives will be used. Some platforms don't have
+//!         optimized implementations of the crypto primitives. Some
+//!         primitives have a Rust implementation that can be used
+//!         instead. *ring* can be built for those platforms by disabling
+//!         the <code>asm</code> feature. This also disables the
+//!         functionality that doesn't have a pure Rust implementation.
 //! <tr><td><code>dev_urandom_fallback (default)</code>
 //!     <td>This is only applicable to Linux. On Linux, by default,
 //!         <code>ring::rand::SystemRandom</code> will fall back to reading
@@ -87,13 +95,12 @@
     warnings,
     while_true,
 )]
+#![cfg_attr(not(feature = "asm"), allow(dead_code))]
 
 #![no_std]
 
 #![cfg_attr(feature = "internal_benches", allow(unstable_features))]
 #![cfg_attr(feature = "internal_benches", feature(test))]
-
-#![cfg_attr(feature = "no_asm", allow(dead_code))]
 
 #[cfg(feature = "internal_benches")]
 extern crate test as bench;
@@ -102,6 +109,7 @@ extern crate test as bench;
 #[macro_use]
 extern crate lazy_static;
 
+#[cfg(any(test, feature="asm"))]
 #[macro_use(format, print, println, vec)]
 extern crate std;
 
@@ -110,10 +118,11 @@ extern crate untrusted;
 #[macro_use] mod bssl;
 #[macro_use] mod polyfill;
 
-#[cfg(not(feature = "no_asm"))]
-#[path = "aead/aead.rs"] pub mod aead;
+#[cfg(feature = "asm")]
+#[path = "aead/aead.rs"]
+pub mod aead;
 
-#[cfg(not(feature = "no_asm"))]
+#[cfg(feature = "asm")]
 pub mod agreement;
 
 mod c;
@@ -122,22 +131,31 @@ pub mod constant_time;
 #[doc(hidden)]
 pub mod der;
 
-#[path = "digest/digest.rs"] pub mod digest;
+#[cfg(feature = "asm")]
+#[path = "digest/digest.rs"]
+pub mod digest;
 
-#[cfg(not(feature = "no_asm"))]
+#[cfg(feature = "asm")]
 #[path = "ec/ec.rs"] mod ec;
 
+#[cfg(feature = "asm")]
 pub mod hkdf;
+
+#[cfg(feature = "asm")]
 pub mod hmac;
+
 mod init;
+
+#[cfg(feature = "asm")]
 pub mod pbkdf2;
 
 pub mod rand;
 
-#[cfg(not(feature = "no_asm"))]
-#[cfg(feature = "use_heap")] mod rsa;
+#[cfg(feature = "asm")]
+#[cfg(feature = "use_heap")]
+mod rsa;
 
-#[cfg(not(feature = "no_asm"))]
+#[cfg(feature = "asm")]
 pub mod signature;
 
 #[cfg(any(feature = "use_heap", test))]
@@ -145,7 +163,7 @@ pub mod test;
 
 #[cfg(test)]
 mod tests {
-    #[cfg(not(feature = "no_asm"))]
+    #[cfg(feature = "asm")]
     bssl_test_rng!(test_bn, bssl_bn_test_main);
     bssl_test!(test_constant_time, bssl_constant_time_test_main);
 }
