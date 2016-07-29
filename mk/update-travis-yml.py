@@ -173,7 +173,7 @@ def format_entry(os, target, compiler, rust, mode, features):
       sudo: required"""
 
     if arch in ["mipsel"]:
-        features = "\"--features=no_asm " + features + "\""
+        features = "\"--no-default-features --features=dev_urandom_fallback\""
     else:
         features = "--features=" + features
 

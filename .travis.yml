@@ -465,7 +465,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: stable
       os: linux
       dist: trusty
@@ -479,7 +479,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: stable
       os: linux
       dist: trusty
@@ -493,7 +493,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: stable
       os: linux
       dist: trusty
@@ -507,7 +507,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: stable
       os: linux
       dist: trusty
@@ -989,7 +989,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: nightly
       os: linux
       dist: trusty
@@ -1003,7 +1003,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: nightly
       os: linux
       dist: trusty
@@ -1017,7 +1017,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: nightly
       os: linux
       dist: trusty
@@ -1031,7 +1031,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: nightly
       os: linux
       dist: trusty
@@ -1493,7 +1493,7 @@ matrix:
           sources:
             - ubuntu-toolchain-r-test
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: beta
       os: linux
       dist: trusty
@@ -1507,7 +1507,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=DEBUG KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=DEBUG KCOV=0
       rust: beta
       os: linux
       dist: trusty
@@ -1521,7 +1521,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm rsa_signing" MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: beta
       os: linux
       dist: trusty
@@ -1535,7 +1535,7 @@ matrix:
           sources:
             - debian-sid
 
-    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--features=no_asm " MODE_X=RELWITHDEBINFO KCOV=0
+    - env: TARGET_X=mipsel-unknown-linux-gnu CC_X=mipsel-linux-gnu-gcc CXX_X=mipsel-linux-gnu-g++ FEATURES_X="--no-default-features --features=dev_urandom_fallback" MODE_X=RELWITHDEBINFO KCOV=0
       rust: beta
       os: linux
       dist: trusty

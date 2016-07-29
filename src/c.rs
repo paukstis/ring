@@ -54,7 +54,7 @@ macro_rules! define_metrics_tests {
         #[test]
         #[allow(unsafe_code)]
         fn $test_c_metrics() {
-            use std::mem;
+            use core::mem;
 
             let c_align = unsafe { $get_c_align_fn() };
             let c_size = unsafe { $get_c_size_fn() };
