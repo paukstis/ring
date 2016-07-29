@@ -116,7 +116,6 @@
 //! stack trace to the line in the test code that panicked: entry 9 in the
 //! stack trace pointing to line 652 of the file `example.rs`.
 
-#[cfg(feature = "asm")]
 use digest;
 
 use std;
@@ -137,7 +136,6 @@ impl TestCase {
     /// inputs. "SHA224" is mapped to None because *ring* intentionally does
     /// not support SHA224, but we need to consume test vectors from NIST that
     /// have SHA224 vectors in them.
-    #[cfg(feature = "asm")]
     pub fn consume_digest_alg(&mut self, key: &str)
                               -> Option<&'static digest::Algorithm> {
         let name = self.consume_string(key);
