@@ -173,9 +173,9 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
         }
 
         for t in 16..80 {
-            let w_t = small_s1_512(w[(t - 2)  % 16]) + w[(t - 7) % 16] +
-                      small_s0_512(w[(t - 15) % 16]) + w[(t - 16) % 16];
-            w[t % 16] = w_t;
+            let w_t = small_s1_512(w[(t - 2)  & 0b1111]) + w[(t - 7) & 0b1111] +
+                      small_s0_512(w[(t - 15) & 0b1111]) + w[(t - 16) & 0b1111];
+            w[t & 0b1111] = w_t;
             let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + w_t;
 
             let t2 = big_s0_512(a) + maj!(a,b,c);
