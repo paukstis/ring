@@ -92,10 +92,7 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
     let mut w: [W32; 64] = [Wrapping(0); 64];
     for i in 0..num {
         let block = &data[i * BLOCK_LEN_256..][..BLOCK_LEN_256];
-        for t in 0..16 {
-            let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
-            w[t] = Wrapping(polyfill::slice::u32_from_be_u8(word))
-        }
+
         let mut a = state[0];
         let mut b = state[1];
         let mut c = state[2];
@@ -106,8 +103,10 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
         let mut h = state[7];
 
         for t in 0..16 {
-            let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + w[t];
-
+            let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
+            let word = Wrapping(polyfill::slice::u32_from_be_u8(word));
+            w[t] = word;
+            let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + word;
             let t2 = big_s0_256(a) + maj!(a,b,c);
             h = g;
             g = f;
@@ -120,13 +119,10 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
         }
 
         for t in 16..64 {
-            w[t] = small_s1_256(w[t - 2])  + w[t - 7]
-                 + small_s0_256(w[t - 15]) + w[t - 16];
-        }
-
-        for t in 16..64 {
-            let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + w[t];
-
+            let word = small_s1_256(w[t - 2])  + w[t - 7] +
+                       small_s0_256(w[t - 15]) + w[t - 16];
+            w[t] = word;
+            let t1 = h + big_s1_256(e) + ch!(e, f, g) + K_256[t] + word;
             let t2 = big_s0_256(a) + maj!(a,b,c);
             h = g;
             g = f;
@@ -172,11 +168,9 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
 
         for t in 0..16 {
             let word = slice_as_array_ref!(&block[t * 8..][..8], 8).unwrap();
-            let w_t = Wrapping(polyfill::slice::u64_from_be_u8(word));
-            w[t] = w_t;
-
-            let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + w_t;
-
+            let word = Wrapping(polyfill::slice::u64_from_be_u8(word));
+            w[t] = word;
+            let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + word;
             let t2 = big_s0_512(a) + maj!(a,b,c);
             h = g;
             g = f;
@@ -189,11 +183,10 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
         }
 
         for t in 16..80 {
-            let w_t = small_s1_512(w[t - 2]) + w[t - 7] +
-                      small_s0_512(w[t - 15]) + w[t - 16];
-            w[t] = w_t;
-            let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + w_t;
-
+            let word = small_s1_512(w[t - 2]) + w[t - 7] +
+                       small_s0_512(w[t - 15]) + w[t - 16];
+            w[t] = word;
+            let t1 = h + big_s1_512(e) + ch!(e, f, g) + K_512[t] + word;
             let t2 = big_s0_512(a) + maj!(a,b,c);
             h = g;
             g = f;
