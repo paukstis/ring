@@ -86,10 +86,48 @@ const SHA512: SHA2 = SHA2 {
 
 // SHA512 sigma functions
 
+trait WrappingAdd {
+    fn wrapping_add(self, rhs: Self) -> Self;
+}
+
+impl WrappingAdd for u32 {
+    fn wrapping_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
+}
+
+impl WrappingAdd for u64 {
+    fn wrapping_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
+}
+
+fn step<T: PrimInt + WrappingAdd>(word: T, k: T, big_s1: (u32, u32, u32),
+                    big_s0: (u32, u32, u32),
+                    a: &mut T,
+                    b: &mut T,
+                    c: &mut T,
+                    d: &mut T,
+                    e: &mut T,
+                    f: &mut T,
+                    g: &mut T,
+                    h: &mut T) {
+    let t1 = (*h).wrapping_add(big_s(*e, big_s1))
+                 .wrapping_add(ch(*e, *f, *g))
+                 .wrapping_add(k)
+                 .wrapping_add(word);
+    let t2 = big_s(*a, big_s0).wrapping_add(maj(*a, *b, *c));
+    *h = *g;
+    *g = *f;
+    *f = *e;
+    *e = (*d).wrapping_add(t1);
+    *d = *c;
+    *c = *b;
+    *b = *a;
+    *a = t1.wrapping_add(t2);
+
+}
+
+
 pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
                             data: &[u8],
                             num: c::size_t) {
-
     // Converts state to array of Wrapping<u32> values.
     let state = polyfill::slice::u64_as_u32_mut(state);
     let state = &mut state[..CHAINING_WORDS_256];
@@ -122,19 +160,9 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
             let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
             let word = polyfill::slice::u32_from_be_u8(word);
             w[t] = word;
-            let t1 = h.wrapping_add(big_s(e, SHA256.big_s1))
-                      .wrapping_add(ch(e, f, g))
-                      .wrapping_add(K_256[t])
-                      .wrapping_add(word);
-            let t2 = big_s(a, SHA256.big_s0).wrapping_add(maj(a, b, c));
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
+            step(word, K_256[t], SHA256.big_s1, SHA256.big_s0,
+                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                 &mut h);
         }
 
         for t in 16..64 {
@@ -143,19 +171,9 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
                         .wrapping_add(small_s(w[t - 15], SHA256.small_s0))
                         .wrapping_add(w[t - 16]);
             w[t] = word;
-            let t1 = h.wrapping_add(big_s(e, SHA256.big_s1))
-                      .wrapping_add(ch(e, f, g))
-                      .wrapping_add(K_256[t])
-                      .wrapping_add(word);
-            let t2 = big_s(a, SHA256.big_s0).wrapping_add(maj(a, b, c));
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
+            step(word, K_256[t], SHA256.big_s1, SHA256.big_s0,
+                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                 &mut h);
         }
 
         state[0] = a.wrapping_add(state[0]);
@@ -193,19 +211,9 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
             let word = slice_as_array_ref!(&block[t * 8..][..8], 8).unwrap();
             let word = polyfill::slice::u64_from_be_u8(word);
             w[t] = word;
-            let t1 = h.wrapping_add(big_s(e, SHA512.big_s1))
-                      .wrapping_add(ch(e, f, g))
-                      .wrapping_add(K_512[t])
-                      .wrapping_add(word);
-            let t2 = big_s(a, SHA512.big_s0).wrapping_add(maj(a, b, c));
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
+            step(word, K_512[t], SHA512.big_s1, SHA512.big_s0,
+                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                 &mut h);
         }
 
         for t in 16..80 {
@@ -214,19 +222,9 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
                         .wrapping_add(small_s(w[t - 15], SHA512.small_s0))
                         .wrapping_add(w[t - 16]);
             w[t] = word;
-            let t1 = h.wrapping_add(big_s(e, SHA512.big_s1))
-                      .wrapping_add(ch(e, f, g))
-                      .wrapping_add(K_512[t])
-                      .wrapping_add(word);
-            let t2 = big_s(a, SHA512.big_s0).wrapping_add(maj(a, b, c));
-            h = g;
-            g = f;
-            f = e;
-            e = d.wrapping_add(t1);
-            d = c;
-            c = b;
-            b = a;
-            a = t1.wrapping_add(t2);
+            step(word, K_512[t], SHA512.big_s1, SHA512.big_s0,
+                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                 &mut h);
         }
 
         state[0] = a.wrapping_add(state[0]);
