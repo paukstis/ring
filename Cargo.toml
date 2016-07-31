@@ -12,6 +12,7 @@ version = "0.1.0"
 name = "ring"
 
 [dependencies]
+num-traits = "0.1.34"
 untrusted = "0.2"
 
 [target.'cfg(unix)'.dependencies]
