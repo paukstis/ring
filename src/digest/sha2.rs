@@ -70,15 +70,27 @@ fn small_s<T: PrimInt>(Wrapping(x): Wrapping<T>, (a, b, c): (u32, u32, usize))
     Wrapping((x.rotate_right(a) ^ x).rotate_right(b) ^ (x >> c))
 }
 
-const SHA256_SMALL_S0: (u32, u32, usize) = (11, 7, 3);
-const SHA256_SMALL_S1: (u32, u32, usize) = (2, 17, 10);
-const SHA256_BIG_S0: (u32, u32, u32) = (9, 11, 2);
-const SHA256_BIG_S1: (u32, u32, u32) = (14, 5, 6);
+struct SHA2 {
+    small_s0: (u32, u32, usize),
+    small_s1: (u32, u32, usize),
+    big_s0: (u32, u32, u32),
+    big_s1: (u32, u32, u32),
 
-const SHA512_SMALL_S0: (u32, u32, usize) = (7, 1, 7);
-const SHA512_SMALL_S1: (u32, u32, usize) = (42, 19, 6);
-const SHA512_BIG_S0: (u32, u32, u32) = (5, 6, 28);
-const SHA512_BIG_S1: (u32, u32, u32) = (23, 4, 14);
+}
+
+const SHA256: SHA2 = SHA2 {
+    small_s0: (11, 7, 3),
+    small_s1: (2, 17, 10),
+    big_s0: (9, 11, 2),
+    big_s1: (14, 5, 6),
+};
+
+const SHA512: SHA2 = SHA2 {
+    small_s0: (7, 1, 7),
+    small_s1: (42, 19, 6),
+    big_s0: (5, 6, 28),
+    big_s1: (23, 4, 14),
+};
 
 // SHA512 sigma functions
 
@@ -96,7 +108,14 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
     let mut w: [W32; 64] = [Wrapping(0); 64];
     for i in 0..num {
         let block = &data[i * BLOCK_LEN_256..][..BLOCK_LEN_256];
-
+        for t in 0..16 {
+            let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
+            w[t] = Wrapping(polyfill::slice::u32_from_be_u8(word))
+        }
+        for t in 16..64 {
+            w[t] = small_s(w[t - 2], SHA256.small_s1) + w[t - 7]
+                 + small_s(w[t - 15], SHA256.small_s0) + w[t - 16];
+        }
         let mut a = state[0];
         let mut b = state[1];
         let mut c = state[2];
@@ -110,8 +129,8 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
             let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
             let word = Wrapping(polyfill::slice::u32_from_be_u8(word));
             w[t] = word;
-            let t1 = h + big_s(e, SHA256_BIG_S1) + ch(e, f, g) + K_256[t] + word;
-            let t2 = big_s(a, SHA256_BIG_S0) + maj(a, b, c);
+            let t1 = h + big_s(e, SHA256.big_s1) + ch(e, f, g) + K_256[t] + word;
+            let t2 = big_s(a, SHA256.big_s0) + maj(a, b, c);
             h = g;
             g = f;
             f = e;
@@ -123,11 +142,11 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
         }
 
         for t in 16..64 {
-            let word = small_s(w[t - 2], SHA256_SMALL_S1)  + w[t - 7] +
-                       small_s(w[t - 15], SHA256_SMALL_S0) + w[t - 16];
+            let word = small_s(w[t - 2], SHA256.small_s1)  + w[t - 7] +
+                       small_s(w[t - 15], SHA256.small_s0) + w[t - 16];
             w[t] = word;
-            let t1 = h + big_s(e, SHA256_BIG_S1) + ch(e, f, g) + K_256[t] + word;
-            let t2 = big_s(a, SHA256_BIG_S0) + maj(a, b, c);
+            let t1 = h + big_s(e, SHA256.big_s1) + ch(e, f, g) + K_256[t] + word;
+            let t2 = big_s(a, SHA256.big_s0) + maj(a, b, c);
             h = g;
             g = f;
             f = e;
@@ -174,8 +193,8 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
             let word = slice_as_array_ref!(&block[t * 8..][..8], 8).unwrap();
             let word = Wrapping(polyfill::slice::u64_from_be_u8(word));
             w[t] = word;
-            let t1 = h + big_s(e, SHA512_BIG_S1) + ch(e, f, g) + K_512[t] + word;
-            let t2 = big_s(a, SHA512_BIG_S0) + maj(a, b, c);
+            let t1 = h + big_s(e, SHA512.big_s1) + ch(e, f, g) + K_512[t] + word;
+            let t2 = big_s(a, SHA512.big_s0) + maj(a, b, c);
             h = g;
             g = f;
             f = e;
@@ -187,11 +206,11 @@ pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
         }
 
         for t in 16..80 {
-            let word = small_s(w[t - 2], SHA512_SMALL_S1) + w[t - 7] +
-                       small_s(w[t - 15], SHA512_SMALL_S0) + w[t - 16];
+            let word = small_s(w[t - 2], SHA512.small_s1) + w[t - 7] +
+                       small_s(w[t - 15], SHA512.small_s0) + w[t - 16];
             w[t] = word;
-            let t1 = h + big_s(e, SHA512_BIG_S1) + ch(e, f, g) + K_512[t] + word;
-            let t2 = big_s(a, SHA512_BIG_S0) + maj(a, b, c);
+            let t1 = h + big_s(e, SHA512.big_s1) + ch(e, f, g) + K_512[t] + word;
+            let t2 = big_s(a, SHA512.big_s0) + maj(a, b, c);
             h = g;
             g = f;
             f = e;
