@@ -946,13 +946,6 @@ static bool TestModInvRejectUnreduced(RAND *rng, BN_CTX *ctx) {
         return false;
       }
       if (base_value >= mod_value &&
-          BN_mod_inverse_no_branch(r.get(), &no_inverse, base.get(), mod.get(),
-                                   ctx) != NULL) {
-        fprintf(stderr, "BN_mod_inverse(%d, %d) succeeded!\n",
-          (int)base_value, (int)mod_value);
-        return false;
-      }
-      if (base_value >= mod_value &&
           BN_mod_inverse_blinded(r.get(), &no_inverse, base.get(), mont.get(),
                                  rng, ctx)) {
         fprintf(stderr, "BN_mod_inverse(%d, %d) succeeded!\n",
@@ -964,12 +957,6 @@ static bool TestModInvRejectUnreduced(RAND *rng, BN_CTX *ctx) {
 
       if (BN_mod_inverse(r.get(), base.get(), mod.get(), ctx) != NULL) {
         fprintf(stderr, "BN_mod_inverse(%d, %d) succeeded!\n",
-                -(int)base_value, (int)mod_value);
-        return false;
-      }
-      if (BN_mod_inverse_no_branch(r.get(), &no_inverse, base.get(), mod.get(),
-                                   ctx) != NULL) {
-        fprintf(stderr, "BN_mod_inverse_no_branch(%d, %d) succeeded!\n",
                 -(int)base_value, (int)mod_value);
         return false;
       }
