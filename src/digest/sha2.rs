@@ -125,117 +125,90 @@ fn step<T: PrimInt + WrappingAdd>(word: T, k: T, big_s1: (u32, u32, u32),
 }
 
 
-pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
-                            data: &[u8],
-                            num: c::size_t) {
-    // Converts state to array of Wrapping<u32> values.
-    let state = polyfill::slice::u64_as_u32_mut(state);
-    let state = &mut state[..CHAINING_WORDS_256];
-    let state = slice_as_array_ref_mut!(state, CHAINING_WORDS_256).unwrap();
 
-    // Message schedule
-    let mut w: [u32; 64] = [0; 64];
-    for i in 0..num {
-        let block = &data[i * BLOCK_LEN_256..][..BLOCK_LEN_256];
-        for t in 0..16 {
-            let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
-            w[t] = polyfill::slice::u32_from_be_u8(word)
-        }
-        for t in 16..64 {
-            w[t] = small_s(w[t - 2], SHA256.small_s1)
-                    .wrapping_add(w[t - 7])
-                    .wrapping_add(small_s(w[t - 15], SHA256.small_s0))
-                    .wrapping_add(w[t - 16]);
-        }
-        let mut a = state[0];
-        let mut b = state[1];
-        let mut c = state[2];
-        let mut d = state[3];
-        let mut e = state[4];
-        let mut f = state[5];
-        let mut g = state[6];
-        let mut h = state[7];
+macro_rules! block_data_order {
+    (/*$name:ident*/ $CHAINING_WORDS:expr, $W_LEN:expr, $BLOCK_LEN:expr,
+     $SHA:expr, $K:expr, $state:expr, $data:expr, $num:expr, $Word:ty,
+     $BPW:expr, $from_be:expr) => {
+        {
+            let state = &mut $state[..$CHAINING_WORDS];
+            let state = slice_as_array_ref_mut!(state, $CHAINING_WORDS).unwrap();
 
-        for t in 0..16 {
-            let word = slice_as_array_ref!(&block[t * 4..][..4], 4).unwrap();
-            let word = polyfill::slice::u32_from_be_u8(word);
-            w[t] = word;
-            step(word, K_256[t], SHA256.big_s1, SHA256.big_s0,
-                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
-                 &mut h);
-        }
+            // Message schedule
+            let mut w: [$Word; $W_LEN] = [0; $W_LEN];
+            for i in 0..$num {
+                let block = &$data[i * $BLOCK_LEN..][..$BLOCK_LEN];
+                for t in 0..16 {
+                    let word =
+                        slice_as_array_ref!(&block[t * $BPW..][..$BPW], $BPW)
+                            .unwrap();
+                    w[t] = $from_be(word)
+                }
+                for t in 16..$W_LEN {
+                    w[t] = small_s(w[t - 2], $SHA.small_s1)
+                            .wrapping_add(w[t - 7])
+                            .wrapping_add(small_s(w[t - 15], $SHA.small_s0))
+                            .wrapping_add(w[t - 16]);
+                }
+                let mut a = state[0];
+                let mut b = state[1];
+                let mut c = state[2];
+                let mut d = state[3];
+                let mut e = state[4];
+                let mut f = state[5];
+                let mut g = state[6];
+                let mut h = state[7];
 
-        for t in 16..64 {
-            let word = small_s(w[t - 2], SHA256.small_s1)
-                        .wrapping_add(w[t - 7])
-                        .wrapping_add(small_s(w[t - 15], SHA256.small_s0))
-                        .wrapping_add(w[t - 16]);
-            w[t] = word;
-            step(word, K_256[t], SHA256.big_s1, SHA256.big_s0,
-                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
-                 &mut h);
-        }
+                for t in 0..16 {
+                    let word =
+                        slice_as_array_ref!(&block[t * $BPW..][..$BPW], $BPW)
+                            .unwrap();
+                    let word = $from_be(word);
+                    w[t] = word;
+                    step(word, $K[t], $SHA.big_s1, $SHA.big_s0,
+                         &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                         &mut h);
+                }
 
-        state[0] = a.wrapping_add(state[0]);
-        state[1] = b.wrapping_add(state[1]);
-        state[2] = c.wrapping_add(state[2]);
-        state[3] = d.wrapping_add(state[3]);
-        state[4] = e.wrapping_add(state[4]);
-        state[5] = f.wrapping_add(state[5]);
-        state[6] = g.wrapping_add(state[6]);
-        state[7] = h.wrapping_add(state[7]);
+                for t in 16..$W_LEN {
+                    let word = small_s(w[t - 2], $SHA.small_s1)
+                                .wrapping_add(w[t - 7])
+                                .wrapping_add(small_s(w[t - 15], $SHA.small_s0))
+                                .wrapping_add(w[t - 16]);
+                    w[t] = word;
+                    step(word, $K[t], $SHA.big_s1, $SHA.big_s0,
+                         &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
+                         &mut h);
+                }
+
+                state[0] = a.wrapping_add(state[0]);
+                state[1] = b.wrapping_add(state[1]);
+                state[2] = c.wrapping_add(state[2]);
+                state[3] = d.wrapping_add(state[3]);
+                state[4] = e.wrapping_add(state[4]);
+                state[5] = f.wrapping_add(state[5]);
+                state[6] = g.wrapping_add(state[6]);
+                state[7] = h.wrapping_add(state[7]);
+            }
+        }
     }
 }
 
+pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
+                            data: &[u8],
+                            num: c::size_t) {
+    let state = polyfill::slice::u64_as_u32_mut(state);
+    block_data_order!(CHAINING_WORDS_256, 64, BLOCK_LEN_256, SHA256,
+                      K_256, state, data, num, u32, 4,
+                      polyfill::slice::u32_from_be_u8)
+}
+
+
+
 pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
                             data: &[u8], num: c::size_t) {
-    // Converts state to array of Wrapping<u64> values.
-    let state = &mut state[..CHAINING_WORDS_512];
-    let state = slice_as_array_ref_mut!(state, CHAINING_WORDS_512).unwrap();
-
-    // Message schedule
-    let mut w: [u64; 80] = [0; 80];
-    for i in 0..num {
-        let block = &data[i * BLOCK_LEN_512..][..BLOCK_LEN_512];
-
-        let mut a = state[0];
-        let mut b = state[1];
-        let mut c = state[2];
-        let mut d = state[3];
-        let mut e = state[4];
-        let mut f = state[5];
-        let mut g = state[6];
-        let mut h = state[7];
-
-        for t in 0..16 {
-            let word = slice_as_array_ref!(&block[t * 8..][..8], 8).unwrap();
-            let word = polyfill::slice::u64_from_be_u8(word);
-            w[t] = word;
-            step(word, K_512[t], SHA512.big_s1, SHA512.big_s0,
-                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
-                 &mut h);
-        }
-
-        for t in 16..80 {
-            let word = small_s(w[t - 2], SHA512.small_s1)
-                        .wrapping_add(w[t - 7])
-                        .wrapping_add(small_s(w[t - 15], SHA512.small_s0))
-                        .wrapping_add(w[t - 16]);
-            w[t] = word;
-            step(word, K_512[t], SHA512.big_s1, SHA512.big_s0,
-                 &mut a, &mut b, &mut c, &mut d, &mut e, &mut f, &mut g,
-                 &mut h);
-        }
-
-        state[0] = a.wrapping_add(state[0]);
-        state[1] = b.wrapping_add(state[1]);
-        state[2] = c.wrapping_add(state[2]);
-        state[3] = d.wrapping_add(state[3]);
-        state[4] = e.wrapping_add(state[4]);
-        state[5] = f.wrapping_add(state[5]);
-        state[6] = g.wrapping_add(state[6]);
-        state[7] = h.wrapping_add(state[7]);
-    }
+    block_data_order!(SHA512, K_512, state, data, num, u64, 8,
+                      polyfill::slice::u64_from_be_u8)
 }
 
 // SHA256 constants K
