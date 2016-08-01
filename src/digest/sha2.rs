@@ -21,21 +21,10 @@ use polyfill;
 use self::num_traits::PrimInt;
 use super::MAX_CHAINING_LEN;
 
-// SHA-256: 512-bit blocks.
-const BLOCK_LEN_256: usize = 512 / 8;
-
-// SHA-384, SHA-512: 1024-bit blocks.
-const BLOCK_LEN_512: usize = 1024 / 8;
-
 // SHA-256: state is 256 bits.
 pub const CHAINING_LEN_256: usize = 256 / 8;
 // SHA-384, SHA-512: state is 512 bits.
 pub const CHAINING_LEN_512: usize = 512 / 8;
-
-// Length of the state as number of words.
-const CHAINING_WORDS_256: usize = CHAINING_LEN_256 / 4;
-const CHAINING_WORDS_512: usize = CHAINING_LEN_512 / 8;
-
 
 // TODO: what's with this?
 //macro_rules! parity {
@@ -63,6 +52,9 @@ fn small_s<T: PrimInt>(x: T, (a, b, c): (u32, u32, usize)) -> T {
 }
 
 struct SHA2 {
+    chaining_words: usize,
+    block_len: usize,
+    w_len: usize,
     small_s0: (u32, u32, usize),
     small_s1: (u32, u32, usize),
     big_s0: (u32, u32, u32),
@@ -71,6 +63,9 @@ struct SHA2 {
 }
 
 const SHA256: SHA2 = SHA2 {
+    chaining_words: CHAINING_LEN_256 / 4,
+    block_len: 512 / 8,
+    w_len: 64,
     small_s0: (11, 7, 3),
     small_s1: (2, 17, 10),
     big_s0: (9, 11, 2),
@@ -78,6 +73,9 @@ const SHA256: SHA2 = SHA2 {
 };
 
 const SHA512: SHA2 = SHA2 {
+    chaining_words: CHAINING_LEN_512 / 8,
+    block_len: 1024 / 8,
+    w_len: 80,
     small_s0: (7, 1, 7),
     small_s1: (42, 19, 6),
     big_s0: (5, 6, 28),
@@ -124,27 +122,25 @@ fn step<T: PrimInt + WrappingAdd>(word: T, k: T, big_s1: (u32, u32, u32),
 
 }
 
-
-
 macro_rules! block_data_order {
-    (/*$name:ident*/ $CHAINING_WORDS:expr, $W_LEN:expr, $BLOCK_LEN:expr,
-     $SHA:expr, $K:expr, $state:expr, $data:expr, $num:expr, $Word:ty,
+    ($SHA:expr, $K:expr, $state:expr, $data:expr, $num:expr, $Word:ty,
      $BPW:expr, $from_be:expr) => {
         {
-            let state = &mut $state[..$CHAINING_WORDS];
-            let state = slice_as_array_ref_mut!(state, $CHAINING_WORDS).unwrap();
+            let state = &mut $state[..$SHA.chaining_words];
+            let state =
+                slice_as_array_ref_mut!(state, $SHA.chaining_words).unwrap();
 
             // Message schedule
-            let mut w: [$Word; $W_LEN] = [0; $W_LEN];
+            let mut w: [$Word; $SHA.w_len] = [0; $SHA.w_len];
             for i in 0..$num {
-                let block = &$data[i * $BLOCK_LEN..][..$BLOCK_LEN];
+                let block = &$data[i * $SHA.block_len..][..$SHA.block_len];
                 for t in 0..16 {
                     let word =
                         slice_as_array_ref!(&block[t * $BPW..][..$BPW], $BPW)
                             .unwrap();
                     w[t] = $from_be(word)
                 }
-                for t in 16..$W_LEN {
+                for t in 16..$SHA.w_len {
                     w[t] = small_s(w[t - 2], $SHA.small_s1)
                             .wrapping_add(w[t - 7])
                             .wrapping_add(small_s(w[t - 15], $SHA.small_s0))
@@ -170,7 +166,7 @@ macro_rules! block_data_order {
                          &mut h);
                 }
 
-                for t in 16..$W_LEN {
+                for t in 16..$SHA.w_len {
                     let word = small_s(w[t - 2], $SHA.small_s1)
                                 .wrapping_add(w[t - 7])
                                 .wrapping_add(small_s(w[t - 15], $SHA.small_s0))
@@ -198,8 +194,7 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
                             data: &[u8],
                             num: c::size_t) {
     let state = polyfill::slice::u64_as_u32_mut(state);
-    block_data_order!(CHAINING_WORDS_256, 64, BLOCK_LEN_256, SHA256,
-                      K_256, state, data, num, u32, 4,
+    block_data_order!(SHA256, K_256, state, data, num, u32, 4,
                       polyfill::slice::u32_from_be_u8)
 }
 
