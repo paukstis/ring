@@ -41,12 +41,12 @@ fn maj<T: PrimInt>(x: T, y: T, z: T) -> T {
     (x & y) ^ (x & z) ^ (y & z)
 }
 
-#[inline]
+#[inline(always)]
 fn big_s<T: PrimInt>(x: T, (a, b, c): (u32, u32, u32)) -> T {
     ((x.rotate_right(a) ^ x).rotate_right(b) ^ x).rotate_right(c)
 }
 
-#[inline]
+#[inline(always)]
 fn small_s<T: PrimInt>(x: T, (a, b, c): (u32, u32, usize)) -> T {
     (x.rotate_right(a) ^ x).rotate_right(b) ^ (x >> c)
 }
@@ -89,13 +89,16 @@ trait WrappingAdd {
 }
 
 impl WrappingAdd for u32 {
+    #[inline(always)]
     fn wrapping_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
 }
 
 impl WrappingAdd for u64 {
+    #[inline(always)]
     fn wrapping_add(self, rhs: Self) -> Self { self.wrapping_add(rhs) }
 }
 
+#[inline(always)]
 fn step<T: PrimInt + WrappingAdd>(word: T, k: T, big_s1: (u32, u32, u32),
                     big_s0: (u32, u32, u32),
                     a: &mut T,
@@ -197,8 +200,6 @@ pub fn block_data_order_256(state: &mut [u64; MAX_CHAINING_LEN / 8],
     block_data_order!(SHA256, K_256, state, data, num, u32, 4,
                       polyfill::slice::u32_from_be_u8)
 }
-
-
 
 pub fn block_data_order_512(state: &mut [u64; MAX_CHAINING_LEN / 8],
                             data: &[u8], num: c::size_t) {
