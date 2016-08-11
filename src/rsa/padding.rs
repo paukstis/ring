@@ -15,12 +15,14 @@
 use {der, digest, error};
 use untrusted;
 
+/// The term "Encoding" comes from RFC 3447.
 #[cfg(feature = "rsa_signing")]
 pub trait Encoding : Sync {
     fn encode(&self, msg: &[u8], out: &mut [u8])
               -> Result<(), error::Unspecified>;
 }
 
+/// The term "Verification" comes from RFC 3447.
 pub trait Verification : Sync {
     fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
               -> Result<(), error::Unspecified>;
