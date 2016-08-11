@@ -165,8 +165,78 @@ pub struct PSS {
     pub digest_alg: &'static digest::Algorithm,
 }
 
-// Maxmimum supported output length for PSS padding.
+#[cfg(feature = "rsa_signing")]
+// Maximum supported length of the salt in bytes.
+// In practice, this is constrained by the maximum digest length.
+const MAX_SALT_LEN: usize = 512 / 8;
+
+// Maxmimum supported output length for PSS padding in bytes.
 const MAX_OUTPUT_LEN: usize = 4096;
+
+#[cfg(feature = "rsa_signing")]
+impl Encoding for PSS {
+    // Implement padding procedure per EMSA-PSS,
+    // https://tools.ietf.org/html/rfc3447#section-9.1.
+    fn encode(&self, msg: &[u8], out: &mut [u8], rng: &rand::SecureRandom)
+              -> Result<(), error::Unspecified> {
+
+        let digest_len = self.digest_alg.output_len;
+        let em_len = out.len();
+
+        debug_assert!(out.len() <= MAX_OUTPUT_LEN);
+
+        // Step 2.
+        let m_hash = digest::digest(self.digest_alg, msg);
+
+        // Step 3: where we assume the digest and salt are of equal length.
+        if em_len < 2 + (2 * digest_len) {
+            return Err(error::Unspecified);
+        }
+
+        // Step 4.
+        let mut salt = [0u8; MAX_SALT_LEN];
+        try!(rng.fill(&mut salt[..digest_len]));
+
+        // Step 5 and 6: compute hash value of:
+        //     (0x)00 00 00 00 00 00 00 00 || m_hash || salt
+        let mut ctx = digest::Context::new(self.digest_alg);
+        let prefix = [0u8; 8];
+        ctx.update(&prefix);
+        ctx.update(m_hash.as_ref());
+        ctx.update(&salt[..digest_len]);
+        let h_hash = ctx.finish();
+
+        // Steps 7 and 8: encode into output the value of db:
+        //     PS || 0x01 || salt
+        // Where PS is all zeros.
+        let db_len = em_len - digest_len - 1;
+        let pad_len = db_len - digest_len - 1;
+        for i in 0..pad_len {
+            out[i] = 0;
+        }
+        out[pad_len] = 0x01;
+        out[pad_len + 1..][..digest_len].copy_from_slice(&salt[..digest_len]);
+
+        // Step 9.
+        let mut db_mask = [0u8; MAX_OUTPUT_LEN];
+        try!(mgf1(h_hash.as_ref(), db_len, &mut db_mask, self.digest_alg));
+
+        // Step 10.
+        for i in 0..db_len {
+            out[i] ^= db_mask[i];
+        }
+
+        // Step 11.
+        out[0] &= 0x7f;
+
+        // Step 12. Finalise output as:
+        //     masked_db || h_hash || 0xbc
+        out[db_len..][..digest_len].copy_from_slice(h_hash.as_ref());
+        out[db_len + digest_len] = 0xbc;
+
+        Ok(())
+    }
+}
 
 impl Verification for PSS {
     // PSS verification as specified in
