@@ -16,12 +16,12 @@ use {der, digest, error};
 use untrusted;
 
 #[cfg(feature = "rsa_signing")]
-pub trait Encoding {
+pub trait Encoding : Sync {
     fn encode(&self, msg: &[u8], out: &mut [u8])
               -> Result<(), error::Unspecified>;
 }
 
-pub trait Verification {
+pub trait Verification : Sync {
     fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
               -> Result<(), error::Unspecified>;
 }

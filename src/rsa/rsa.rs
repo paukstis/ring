@@ -34,7 +34,7 @@ pub use self::padding::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 
 /// Parameters for RSA verification.
 pub struct RSAParameters {
-    padding_alg: &'static (padding::Verification + Sync),
+    padding_alg: &'static padding::Verification,
     min_bits: usize,
 }
 
