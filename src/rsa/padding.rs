@@ -12,7 +12,7 @@
 // OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 // CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-use {der, digest, error};
+use {der, digest, error, polyfill};
 use untrusted;
 
 /// The term "Encoding" comes from RFC 3447.
@@ -154,3 +154,139 @@ impl Verification for PKCS1 {
         })
     }
 }
+
+/// PSS Padding as described in https://tools.ietf.org/html/rfc3447#section-9.1.
+/// Salt length is fixed to be the length of the output of the digest algorithm.
+/// The only mask generating function supported is MGF1.
+/// The size (in bits) of the RSA moduli is assumed to be a multiple of 8.
+pub struct PSS {
+    pub digest_alg: &'static digest::Algorithm,
+}
+
+// Maxmimum supported output length for PSS padding.
+const MAX_OUTPUT_LEN: usize = 4096;
+
+impl Verification for PSS {
+    // PSS verification as specified in
+    // https://tools.ietf.org/html/rfc3447#section-9.1.2
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
+              -> Result<(), error::Unspecified> {
+
+        let em_len = encoded.len();
+        encoded.read_all(error::Unspecified, |em| {
+            let digest_len = self.digest_alg.output_len;
+
+            // Step 2.
+            let m_hash = digest::digest(self.digest_alg,
+                                        msg.as_slice_less_safe());
+
+            // Step 3: where we assume the digest and salt are of equal length.
+            if em_len < 2 + (2 * digest_len) {
+                return Err(error::Unspecified)
+            }
+
+            // Steps 4 and 5: Parse encoded message as:
+            //     masked_db || h_hash || 0xbc
+            let db_len = em_len - digest_len - 1;
+            let masked_db = try!(em.skip_and_get_input(db_len));
+            let h_hash = try!(em.skip_and_get_input(digest_len));
+            if try!(em.read_byte()) != 0xbc {
+                return Err(error::Unspecified);
+            }
+
+            // Step 7.
+            let mut db = [0u8; MAX_OUTPUT_LEN];
+            try!(mgf1(h_hash.as_slice_less_safe(), db_len, &mut db,
+                      self.digest_alg));
+
+            try!(masked_db.read_all(error::Unspecified, |masked_bytes| {
+                // Step 6. Moduli lengths are always a multiple of 8 so the top
+                // bit must be 0.
+                let b = try!(masked_bytes.read_byte());
+                if b & 0x80 != 0 {
+                    return Err(error::Unspecified);
+                } else {
+                    db[0] ^= b;
+                }
+
+                // Step 8.
+                for i in 1..db_len {
+                    let b = try!(masked_bytes.read_byte());
+                    db[i] ^= b;
+                }
+                Ok(())
+            }));
+
+            // Step 9.
+            db[0] &= 0x7f;
+
+            // Step 10.
+            let pad_len = db_len - digest_len - 1;
+            for i in 0..pad_len {
+                if db[i] != 0 {
+                    return Err(error::Unspecified);
+                }
+            }
+            if db[pad_len] != 1 {
+                return Err(error::Unspecified);
+            }
+
+            // Step 11.
+            let salt = &db[db_len - digest_len..][..digest_len];
+
+            // Step 12 and 13: compute hash value of:
+            //     (0x)00 00 00 00 00 00 00 00 || m_hash || salt
+            let mut ctx = digest::Context::new(self.digest_alg);
+            let prefix = [0u8; 8];
+            ctx.update(&prefix);
+            ctx.update(m_hash.as_ref());
+            ctx.update(&salt);
+            let h_hash_check = ctx.finish();
+
+            // Step 14.
+            if h_hash != h_hash_check.as_ref() {
+                return Err(error::Unspecified);
+            }
+
+            Ok(())
+        })
+    }
+}
+
+// Mask-generating function MGF1 as described in
+// https://tools.ietf.org/html/rfc3447#appendix-B.2.1.
+fn mgf1(seed: &[u8], mask_len: usize, mask: &mut [u8],
+        digest_alg: &'static digest::Algorithm)
+        -> Result<(), error::Unspecified> {
+
+    let digest_len = digest_alg.output_len;
+
+    // Maximum counter value is the value of (mask_len / digest_len) rounded up.
+    let ctr_max = 1 + ((mask_len - 1) / digest_len);
+    for i in 0..ctr_max {
+        let mut ctx = digest::Context::new(digest_alg);
+        ctx.update(seed);
+        ctx.update(&polyfill::slice::be_u8_from_u32(i as u32));
+        let digest = ctx.finish();
+        mask[i * digest_len..][..digest_len].copy_from_slice(digest.as_ref());
+    }
+
+    Ok(())
+}
+
+macro_rules! rsa_pss_padding {
+    ( $PADDING_ALGORITHM:ident, $digest_alg:expr, $doc_str:expr ) => {
+        #[doc=$doc_str]
+        /// Feature: `rsa_signing`.
+        pub static $PADDING_ALGORITHM: PSS = PSS {
+            digest_alg: $digest_alg,
+        };
+    }
+}
+
+rsa_pss_padding!(RSA_PSS_SHA256, &digest::SHA256,
+                 "PSS padding using SHA-256 for RSA signatures.");
+rsa_pss_padding!(RSA_PSS_SHA384, &digest::SHA384,
+                 "PSS padding using SHA-384 for RSA signatures.");
+rsa_pss_padding!(RSA_PSS_SHA512, &digest::SHA512,
+                 "PSS padding using SHA-512 for RSA signatures.");

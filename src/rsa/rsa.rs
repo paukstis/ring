@@ -30,7 +30,10 @@ mod padding;
 
 // `RSA_PKCS1_SHA1` is intentionally not exposed.
 use self::padding::RSA_PKCS1_SHA1;
-pub use self::padding::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
+pub use self::padding::{
+    RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512,
+    RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512
+};
 
 /// Parameters for RSA verification.
 pub struct RSAParameters {
@@ -91,6 +94,16 @@ rsa_impl!(RSA_PKCS1_2048_8192_SHA512, 2048, RSA_PKCS1_SHA512,
 rsa_impl!(RSA_PKCS1_3072_8192_SHA384, 3072, RSA_PKCS1_SHA384,
            "Verification of signatures using RSA keys of 3072-8192 bits,
             PKCS#1.5 padding, and SHA-384.");
+
+rsa_impl!(RSA_PSS_2048_8192_SHA256, 2048, RSA_PSS_SHA256,
+           "Verification of signatures using RSA keys of 2048-8192 bits,
+            PSS padding, and SHA-256.");
+rsa_impl!(RSA_PSS_2048_8192_SHA384, 2048, RSA_PSS_SHA384,
+           "Verification of signatures using RSA keys of 2048-8192 bits,
+            PSS padding, and SHA-384.");
+rsa_impl!(RSA_PSS_2048_8192_SHA512, 2048, RSA_PSS_SHA512,
+           "Verification of signatures using RSA keys of 2048-8192 bits,
+            PSS padding, and SHA-512.");
 
 fn parse_public_key<'a>(input: untrusted::Input<'a>) ->
                         Result<(&'a [u8], &'a [u8]), error::Unspecified> {

@@ -184,6 +184,10 @@ pub use rsa::{
     RSA_PKCS1_2048_8192_SHA512,
 
     RSA_PKCS1_3072_8192_SHA384,
+
+    RSA_PSS_2048_8192_SHA256,
+    RSA_PSS_2048_8192_SHA384,
+    RSA_PSS_2048_8192_SHA512,
 };
 
 /// A public key signature returned from a signing operation.
