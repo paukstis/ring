@@ -15,10 +15,12 @@
 use {der, digest, error, polyfill};
 use untrusted;
 
-/// The term "Encoding" comes from RFC 3447.
+#[cfg(feature = "rsa_signing")]
+use rand;
+
 #[cfg(feature = "rsa_signing")]
 pub trait Encoding : Sync {
-    fn encode(&self, msg: &[u8], out: &mut [u8])
+    fn encode(&self, msg: &[u8], out: &mut [u8], rng: &rand::SecureRandom)
               -> Result<(), error::Unspecified>;
 }
 
@@ -37,7 +39,7 @@ pub struct PKCS1 {
 impl Encoding for PKCS1 {
     // Implement padding procedure per EMSA-PKCS1-v1_5,
     // https://tools.ietf.org/html/rfc3447#section-9.2.
-    fn encode(&self, msg: &[u8], out: &mut [u8])
+    fn encode(&self, msg: &[u8], out: &mut [u8], _: &rand::SecureRandom)
               -> Result<(), error::Unspecified> {
         let digest_len =
             self.digestinfo_prefix.len() + self.digest_alg.output_len;

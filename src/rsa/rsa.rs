@@ -233,7 +233,7 @@ impl RSAKeyPair {
             return Err(error::Unspecified);
         }
 
-        try!(padding_alg.encode(msg, signature));
+        try!(padding_alg.encode(msg, signature, rng));
 
         let mut rand = rand::RAND::new(rng);
         bssl::map_result(unsafe {
