@@ -16,7 +16,7 @@
 
 /// RSA PKCS#1 1.5 signatures.
 
-use {bssl, c, der, digest, error, signature};
+use {bssl, c, der, error, signature};
 
 #[cfg(feature = "rsa_signing")]
 use rand;
@@ -29,12 +29,12 @@ use untrusted;
 mod padding;
 
 // `RSA_PKCS1_SHA1` is intentionally not exposed.
-use self::padding::{RSAPadding, RSA_PKCS1_SHA1};
+use self::padding::RSA_PKCS1_SHA1;
 pub use self::padding::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 
 /// Parameters for RSA verification.
 pub struct RSAParameters {
-    padding_alg: &'static RSAPadding,
+    padding_alg: &'static (padding::Verification + Sync),
     min_bits: usize,
 }
 
@@ -58,41 +58,7 @@ impl signature::VerificationAlgorithm for RSAParameters {
                                    self.min_bits, MAX_BITS)
         }));
 
-        untrusted::Input::from(decoded).read_all(error::Unspecified, |decoded| {
-            if try!(decoded.read_byte()) != 0 ||
-               try!(decoded.read_byte()) != 1 {
-                return Err(error::Unspecified);
-            }
-
-            let mut ps_len = 0;
-            loop {
-                match try!(decoded.read_byte()) {
-                    0xff => { ps_len += 1; },
-                    0x00 => { break; },
-                    _ => { return Err(error::Unspecified); }
-                }
-            }
-            if ps_len < 8 {
-                return Err(error::Unspecified);
-            }
-
-            let decoded_digestinfo_prefix =
-                try!(decoded.skip_and_get_input(
-                        self.padding_alg.digestinfo_prefix.len()));
-            if decoded_digestinfo_prefix != self.padding_alg.digestinfo_prefix {
-                return Err(error::Unspecified);
-            }
-
-            let digest_alg = self.padding_alg.digest_alg;
-            let decoded_digest =
-                try!(decoded.skip_and_get_input(digest_alg.output_len));
-            let digest = digest::digest(digest_alg, msg.as_slice_less_safe());
-            if decoded_digest != digest.as_ref() {
-                return Err(error::Unspecified);
-            }
-
-            Ok(())
-        })
+        self.padding_alg.verify(msg, untrusted::Input::from(decoded))
     }
 }
 

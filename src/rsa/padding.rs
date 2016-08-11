@@ -13,9 +13,16 @@
 // CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
 use {der, digest, error};
+use untrusted;
 
+#[cfg(feature = "rsa_signing")]
 pub trait Encoding {
     fn encode(&self, msg: &[u8], out: &mut [u8])
+              -> Result<(), error::Unspecified>;
+}
+
+pub trait Verification {
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
               -> Result<(), error::Unspecified>;
 }
 
@@ -24,6 +31,7 @@ pub struct RSAPadding {
     pub digestinfo_prefix: &'static [u8],
 }
 
+#[cfg(feature ="rsa_signing")]
 impl Encoding for RSAPadding {
     // Implement padding procedure per EMSA-PKCS1-v1_5,
     // https://tools.ietf.org/html/rfc3447#section-9.2.
@@ -104,3 +112,43 @@ pkcs1_digestinfo_prefix!(
 pkcs1_digestinfo_prefix!(
     SHA512_PKCS1_DIGESTINFO_PREFIX, 64, 9,
     [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03 ]);
+
+impl Verification for RSAPadding {
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
+              -> Result<(), error::Unspecified> {
+        encoded.read_all(error::Unspecified, |decoded| {
+            if try!(decoded.read_byte()) != 0 ||
+               try!(decoded.read_byte()) != 1 {
+                return Err(error::Unspecified);
+            }
+
+            let mut ps_len = 0;
+            loop {
+                match try!(decoded.read_byte()) {
+                    0xff => { ps_len += 1; },
+                    0x00 => { break; },
+                    _ => { return Err(error::Unspecified); }
+                }
+            }
+            if ps_len < 8 {
+                return Err(error::Unspecified);
+            }
+
+            let decoded_digestinfo_prefix =
+                try!(decoded.skip_and_get_input(
+                        self.digestinfo_prefix.len()));
+            if decoded_digestinfo_prefix != self.digestinfo_prefix {
+                return Err(error::Unspecified);
+            }
+
+            let digest_alg = self.digest_alg;
+            let decoded_digest =
+                try!(decoded.skip_and_get_input(digest_alg.output_len));
+            let digest = digest::digest(digest_alg, msg.as_slice_less_safe());
+            if decoded_digest != digest.as_ref() {
+                return Err(error::Unspecified);
+            }
+            Ok(())
+        })
+    }
+}
