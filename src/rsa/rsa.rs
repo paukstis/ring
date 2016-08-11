@@ -62,7 +62,7 @@ impl signature::VerificationAlgorithm for RSAParameters {
     }
 }
 
-macro_rules! rsa_pkcs1 {
+macro_rules! rsa_impl {
     ( $VERIFY_ALGORITHM:ident, $min_bits:expr, $PADDING_ALGORITHM:ident,
       $doc_str:expr ) => {
         #[doc=$doc_str]
@@ -76,19 +76,19 @@ macro_rules! rsa_pkcs1 {
     }
 }
 
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA1, 2048, RSA_PKCS1_SHA1,
+rsa_impl!(RSA_PKCS1_2048_8192_SHA1, 2048, RSA_PKCS1_SHA1,
            "Verification of signatures using RSA keys of 2048-8192 bits,
             PKCS#1.5 padding, and SHA-1.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA256, 2048, RSA_PKCS1_SHA256,
+rsa_impl!(RSA_PKCS1_2048_8192_SHA256, 2048, RSA_PKCS1_SHA256,
            "Verification of signatures using RSA keys of 2048-8192 bits,
             PKCS#1.5 padding, and SHA-256.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA384, 2048, RSA_PKCS1_SHA384,
+rsa_impl!(RSA_PKCS1_2048_8192_SHA384, 2048, RSA_PKCS1_SHA384,
            "Verification of signatures using RSA keys of 2048-8192 bits,
             PKCS#1.5 padding, and SHA-384.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA512, 2048, RSA_PKCS1_SHA512,
+rsa_impl!(RSA_PKCS1_2048_8192_SHA512, 2048, RSA_PKCS1_SHA512,
            "Verification of signatures using RSA keys of 2048-8192 bits,
             PKCS#1.5 padding, and SHA-512.");
-rsa_pkcs1!(RSA_PKCS1_3072_8192_SHA384, 3072, RSA_PKCS1_SHA384,
+rsa_impl!(RSA_PKCS1_3072_8192_SHA384, 3072, RSA_PKCS1_SHA384,
            "Verification of signatures using RSA keys of 3072-8192 bits,
             PKCS#1.5 padding, and SHA-384.");
 
