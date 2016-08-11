@@ -28,13 +28,13 @@ pub trait Verification : Sync {
               -> Result<(), error::Unspecified>;
 }
 
-pub struct RSAPadding {
+pub struct PKCS1 {
     digest_alg: &'static digest::Algorithm,
     digestinfo_prefix: &'static [u8],
 }
 
 #[cfg(feature ="rsa_signing")]
-impl Encoding for RSAPadding {
+impl Encoding for PKCS1 {
     // Implement padding procedure per EMSA-PKCS1-v1_5,
     // https://tools.ietf.org/html/rfc3447#section-9.2.
     fn encode(&self, msg: &[u8], out: &mut [u8])
@@ -67,7 +67,7 @@ macro_rules! rsa_pkcs1_padding {
       $doc_str:expr ) => {
         #[doc=$doc_str]
         /// Feature: `rsa_signing`.
-        pub static $PADDING_ALGORITHM: RSAPadding = RSAPadding {
+        pub static $PADDING_ALGORITHM: PKCS1 = PKCS1 {
             digest_alg: $digest_alg,
             digestinfo_prefix: $digestinfo_prefix,
         };
@@ -115,7 +115,7 @@ pkcs1_digestinfo_prefix!(
     SHA512_PKCS1_DIGESTINFO_PREFIX, 64, 9,
     [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03 ]);
 
-impl Verification for RSAPadding {
+impl Verification for PKCS1 {
     fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
               -> Result<(), error::Unspecified> {
         encoded.read_all(error::Unspecified, |decoded| {
