@@ -393,6 +393,66 @@ mod tests {
     #[cfg(feature = "rsa_signing")]
     extern { static GFp_BN_BLINDING_COUNTER: u32; }
 
+    #[cfg(feature = "rsa_signing")]
+    #[test]
+    fn test_signature_rsa_pss_sign() {
+        // Outputs the same value whenever a certain length is requested (the
+        // same as the length of the salt). Otherwise, the rng is used.
+        struct DeterministicSalt<'a> {
+            salt: &'a [u8],
+            rng: &'a rand::SecureRandom
+        }
+        impl<'a> rand::SecureRandom for DeterministicSalt<'a> {
+            fn fill(&self, dest: &mut [u8]) -> Result<(), error::Unspecified> {
+                let dest_len = dest.len();
+                if dest_len != self.salt.len() {
+                    try!(self.rng.fill(dest));
+                } else {
+                    dest.copy_from_slice(&self.salt);
+                }
+                Ok(())
+            }
+        }
+        let rng = rand::SystemRandom::new();
+
+        test::from_file("src/rsa/rsa_pss_sign_tests.txt", |section, test_case| {
+            let digest_name = test_case.consume_string("Digest");
+            let alg = match digest_name.as_ref() {
+                "SHA256" => &RSA_PSS_SHA256,
+                "SHA384" => &RSA_PSS_SHA384,
+                "SHA512" => &RSA_PSS_SHA512,
+                _ =>  { panic!("Unsupported digest: {}", digest_name) }
+            };
+
+            let result = test_case.consume_string("Result");
+            let private_key = test_case.consume_bytes("Key");
+            let private_key = untrusted::Input::from(&private_key);
+            let key_pair = RSAKeyPair::from_der(private_key);
+            if key_pair.is_err() && result == "Fail-Invalid-Key" {
+                return Ok(());
+            }
+            let key_pair = key_pair.unwrap();
+
+            let msg = test_case.consume_bytes("Msg");
+            let salt = test_case.consume_bytes("Salt");
+            let expected = test_case.consume_bytes("Sig");
+
+            let new_rng = DeterministicSalt { salt: &salt, rng: &rng };
+
+            // XXX: This test is too slow on Android ARM Travis CI builds.
+            // TODO: re-enable these tests on Android ARM.
+            if section == "Skipped on Android ARM due to Travis CI Timeouts" &&
+               cfg!(all(target_os = "android", target_arch = "arm")) {
+               return Ok(());
+            }
+            let mut actual: std::vec::Vec<u8> =
+                vec![0; key_pair.public_modulus_len()];
+            try!(key_pair.sign(alg, &new_rng, &msg, actual.as_mut_slice()));
+            assert_eq!(actual.as_slice() == &expected[..], result == "P");
+            Ok(())
+        });
+    }
+
     #[test]
     fn test_signature_rsa_pss_verify() {
         test::from_file("src/rsa/rsa_pss_verify_tests.txt",
