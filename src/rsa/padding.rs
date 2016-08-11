@@ -29,8 +29,8 @@ pub trait Verification : Sync {
 }
 
 pub struct RSAPadding {
-    pub digest_alg: &'static digest::Algorithm,
-    pub digestinfo_prefix: &'static [u8],
+    digest_alg: &'static digest::Algorithm,
+    digestinfo_prefix: &'static [u8],
 }
 
 #[cfg(feature ="rsa_signing")]
