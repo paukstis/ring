@@ -136,9 +136,9 @@ int RSA_check_key(const RSA *key, BN_CTX *ctx) {
   BN_init(&dmq1);
   BN_init(&iqmp_times_q);
 
-  /* The public modulus must be large enough. |RSAPublicKey::sign| depends on
-   * this; without it, |RSAPublicKey::sign| would generate padding that is
-   * invalid (too few 0xFF bytes) for very small keys.
+  /* The public modulus must be large enough. |RSAPadding::encode|
+   * depends on this; without it, |RSAPadding::encode| would generate padding
+   * that is invalid (too few 0xFF bytes) for very small keys.
    *
    * XXX: The maximum limit of 4096 bits is primarily due to lack of testing
    * of larger key sizes; see, in particular,

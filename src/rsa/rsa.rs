@@ -247,14 +247,15 @@ impl RSAKeyPair {
     /// platforms, it is done less perfectly. To help mitigate the current
     /// imperfections, and for defense-in-depth, base blinding is always done.
     /// Exponent blinding is not done, but it may be done in the future.
-    pub fn sign(&self, padding_alg: &'static RSAPadding,
+    pub fn sign(&self, padding_alg: &'static padding::Encoding,
                 rng: &rand::SecureRandom, msg: &[u8], signature: &mut [u8])
                 -> Result<(), error::Unspecified> {
         if signature.len() != self.public_modulus_len() {
             return Err(error::Unspecified);
         }
 
-        try!(padding_alg.pad(msg, signature));
+        try!(padding_alg.encode(msg, signature));
+
         let mut rand = rand::RAND::new(rng);
         bssl::map_result(unsafe {
             let blinding = *(self.blinding.lock().unwrap());

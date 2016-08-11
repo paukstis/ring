@@ -14,17 +14,21 @@
 
 use {der, digest, error};
 
+pub trait Encoding {
+    fn encode(&self, msg: &[u8], out: &mut [u8])
+              -> Result<(), error::Unspecified>;
+}
+
 pub struct RSAPadding {
     pub digest_alg: &'static digest::Algorithm,
     pub digestinfo_prefix: &'static [u8],
 }
 
-#[cfg(feature = "rsa_signing")]
-impl RSAPadding {
+impl Encoding for RSAPadding {
     // Implement padding procedure per EMSA-PKCS1-v1_5,
     // https://tools.ietf.org/html/rfc3447#section-9.2.
-    pub fn pad(&self, msg: &[u8], out: &mut [u8])
-               -> Result<(), error::Unspecified> {
+    fn encode(&self, msg: &[u8], out: &mut [u8])
+              -> Result<(), error::Unspecified> {
         let digest_len =
             self.digestinfo_prefix.len() + self.digest_alg.output_len;
 
