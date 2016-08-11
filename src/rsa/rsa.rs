@@ -394,6 +394,50 @@ mod tests {
     extern { static GFp_BN_BLINDING_COUNTER: u32; }
 
     #[test]
+    fn test_signature_rsa_pss_verify() {
+        test::from_file("src/rsa/rsa_pss_verify_tests.txt",
+                        |section, test_case| {
+            assert_eq!(section, "");
+
+            let digest_name = test_case.consume_string("Digest");
+            let alg = match digest_name.as_ref() {
+                "SHA256" => &RSA_PSS_2048_8192_SHA256,
+                "SHA384" => &RSA_PSS_2048_8192_SHA384,
+                "SHA512" => &RSA_PSS_2048_8192_SHA512,
+                _ =>  { panic!("Unsupported digest: {}", digest_name) }
+            };
+
+            let public_key = test_case.consume_bytes("Key");
+            let public_key = untrusted::Input::from(&public_key);
+
+            // Sanity check that we correctly DER-encoded the originally-
+            // provided separate (n, e) components. When we add test vectors
+            // for improperly-encoded signatures, we'll have to revisit this.
+            assert!(public_key.read_all(error::Unspecified, |input| {
+                der::nested(input, der::Tag::Sequence, error::Unspecified,
+                            |input| {
+                    let _ = try!(der::positive_integer(input));
+                    let _ = try!(der::positive_integer(input));
+                    Ok(())
+                })
+            }).is_ok());
+
+            let msg = test_case.consume_bytes("Msg");
+            let msg = untrusted::Input::from(&msg);
+
+            let sig = test_case.consume_bytes("Sig");
+            let sig = untrusted::Input::from(&sig);
+
+            let expected_result = test_case.consume_string("Result");
+
+            let actual_result = signature::verify(alg, public_key, msg, sig);
+            assert_eq!(actual_result.is_ok(), expected_result == "P");
+
+            Ok(())
+        });
+    }
+
+    #[test]
     fn test_signature_rsa_pkcs1_verify() {
         test::from_file("src/rsa/rsa_pkcs1_verify_tests.txt",
                         |section, test_case| {
