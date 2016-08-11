@@ -26,48 +26,17 @@ use std;
 
 use untrusted;
 
+mod padding;
 
-pub struct RSAPadding {
-    digest_alg: &'static digest::Algorithm,
-    digestinfo_prefix: &'static [u8],
-}
+// `RSA_PKCS1_SHA1` is intentionally not exposed.
+use self::padding::{RSAPadding, RSA_PKCS1_SHA1};
+pub use self::padding::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
 
-#[cfg(feature = "rsa_signing")]
-impl RSAPadding {
-    // Implement padding procedure per EMSA-PKCS1-v1_5,
-    // https://tools.ietf.org/html/rfc3447#section-9.2.
-    fn pad(&self, msg: &[u8], out: &mut [u8])
-           -> Result<(), error::Unspecified> {
-        let digest_len =
-            self.digestinfo_prefix.len() + self.digest_alg.output_len;
-
-        // Require at least 8 bytes of padding. Since we disallow keys smaller
-        // than 2048 bits, this should never happen anyway.
-        debug_assert!(out.len() >= digest_len + 11);
-        let pad_len = out.len() - digest_len - 3;
-        out[0] = 0;
-        out[1] = 1;
-        for i in 0..pad_len {
-            out[2 + i] = 0xff;
-        }
-        out[2 + pad_len] = 0;
-
-        let (digest_prefix, digest_dst) = out[3 + pad_len..].split_at_mut(
-            self.digestinfo_prefix.len());
-        digest_prefix.copy_from_slice(self.digestinfo_prefix);
-        digest_dst.copy_from_slice(
-            digest::digest(self.digest_alg, msg).as_ref());
-        Ok(())
-    }
-}
-
-
-/// Parameters for RSA signing and verification.
+/// Parameters for RSA verification.
 pub struct RSAParameters {
     padding_alg: &'static RSAPadding,
     min_bits: usize,
 }
-
 
 impl signature::VerificationAlgorithm for RSAParameters {
     fn verify(&self, public_key: untrusted::Input, msg: untrusted::Input,
@@ -127,31 +96,6 @@ impl signature::VerificationAlgorithm for RSAParameters {
     }
 }
 
-macro_rules! rsa_pkcs1_padding {
-    ( $PADDING_ALGORITHM:ident, $digest_alg:expr, $digestinfo_prefix:expr,
-      $doc_str:expr ) => {
-        #[doc=$doc_str]
-        /// Feature: `rsa_signing`.
-        pub static $PADDING_ALGORITHM: RSAPadding = RSAPadding {
-            digest_alg: $digest_alg,
-            digestinfo_prefix: $digestinfo_prefix,
-        };
-    }
-}
-
-rsa_pkcs1_padding!(RSA_PKCS1_SHA1, &digest::SHA1,
-                   &SHA1_PKCS1_DIGESTINFO_PREFIX,
-                   "Signing using RSA with PKCS#1 1.5 padding and SHA-1.");
-rsa_pkcs1_padding!(RSA_PKCS1_SHA256, &digest::SHA256,
-                   &SHA256_PKCS1_DIGESTINFO_PREFIX,
-                   "Signing using RSA with PKCS#1 1.5 padding and SHA-256.");
-rsa_pkcs1_padding!(RSA_PKCS1_SHA384, &digest::SHA384,
-                   &SHA384_PKCS1_DIGESTINFO_PREFIX,
-                   "Signing using RSA with PKCS#1 1.5 padding and SHA3846.");
-rsa_pkcs1_padding!(RSA_PKCS1_SHA512, &digest::SHA512,
-                   &SHA512_PKCS1_DIGESTINFO_PREFIX,
-                   "Signing using RSA with PKCS#1 1.5 padding and SHA-512.");
-
 macro_rules! rsa_pkcs1 {
     ( $VERIFY_ALGORITHM:ident, $min_bits:expr, $PADDING_ALGORITHM:ident,
       $doc_str:expr ) => {
@@ -181,35 +125,6 @@ rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA512, 2048, RSA_PKCS1_SHA512,
 rsa_pkcs1!(RSA_PKCS1_3072_8192_SHA384, 3072, RSA_PKCS1_SHA384,
            "Verification of signatures using RSA keys of 3072-8192 bits,
             PKCS#1.5 padding, and SHA-384.");
-
-macro_rules! pkcs1_digestinfo_prefix {
-    ( $name:ident, $digest_len:expr, $digest_oid_len:expr,
-      [ $( $digest_oid:expr ),* ] ) => {
-        static $name: [u8; 2 + 8 + $digest_oid_len] = [
-            der::Tag::Sequence as u8, 8 + $digest_oid_len + $digest_len,
-                der::Tag::Sequence as u8, 2 + $digest_oid_len + 2,
-                    der::Tag::OID as u8, $digest_oid_len, $( $digest_oid ),*,
-                    der::Tag::Null as u8, 0,
-                der::Tag::OctetString as u8, $digest_len,
-        ];
-    }
-}
-
-pkcs1_digestinfo_prefix!(
-    SHA1_PKCS1_DIGESTINFO_PREFIX, 20, 5, [ 0x2b, 0x0e, 0x03, 0x02, 0x1a ]);
-
-pkcs1_digestinfo_prefix!(
-    SHA256_PKCS1_DIGESTINFO_PREFIX, 32, 9,
-    [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x01 ]);
-
-pkcs1_digestinfo_prefix!(
-    SHA384_PKCS1_DIGESTINFO_PREFIX, 48, 9,
-    [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x02 ]);
-
-pkcs1_digestinfo_prefix!(
-    SHA512_PKCS1_DIGESTINFO_PREFIX, 64, 9,
-    [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03 ]);
-
 
 fn parse_public_key<'a>(input: untrusted::Input<'a>) ->
                         Result<(&'a [u8], &'a [u8]), error::Unspecified> {
