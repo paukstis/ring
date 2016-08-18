@@ -15,11 +15,14 @@
 use {der, digest, error, polyfill};
 use untrusted;
 
+#[cfg(feature = "rsa_signing")]
+use rand;
+
 /// The term "Encoding" comes from RFC 3447.
 #[cfg(feature = "rsa_signing")]
 pub trait Encoding: Sync {
-    fn encode(&self, msg: &[u8], out: &mut [u8])
-              -> Result<(), error::Unspecified>;
+    fn encode(&self, msg: &[u8], out: &mut [u8], bit_len: usize,
+              rng: &rand::SecureRandom) -> Result<(), error::Unspecified>;
 }
 
 /// The term "Verification" comes from RFC 3447.
@@ -37,8 +40,9 @@ pub struct PKCS1 {
 impl Encoding for PKCS1 {
     // Implement padding procedure per EMSA-PKCS1-v1_5,
     // https://tools.ietf.org/html/rfc3447#section-9.2.
-    fn encode(&self, msg: &[u8], out: &mut [u8])
-              -> Result<(), error::Unspecified> {
+    fn encode(&self, msg: &[u8], out: &mut [u8], bit_len: usize,
+              _: &rand::SecureRandom) -> Result<(), error::Unspecified> {
+        assert_eq!(out.len() * 8, bit_len);
         let digest_len = self.digestinfo_prefix.len() +
                          self.digest_alg.output_len;
 
@@ -168,6 +172,11 @@ pub struct PSS {
     digest_alg: &'static digest::Algorithm,
 }
 
+#[cfg(feature = "rsa_signing")]
+// Maximum supported length of the salt in bytes.
+// In practice, this is constrained by the maximum digest length.
+const MAX_SALT_LEN: usize = 512 / 8;
+
 // The maximum supported output length for PSS padding is equal to the maximum
 // supported RSA modulus length.
 // TODO: Can we avoid requiring this MAX_OUTPUT_LEN buffer?
@@ -175,6 +184,68 @@ const MAX_OUTPUT_LEN: usize = 8192 / 8;
 
 // Fixed prefix used in the computation of PSS encoding and verification.
 const PSS_PREFIX_ZEROS: [u8; 8] = [0u8; 8];
+
+#[cfg(feature = "rsa_signing")]
+impl Encoding for PSS {
+    // Implement padding procedure per EMSA-PSS,
+    // https://tools.ietf.org/html/rfc3447#section-9.1.
+    fn encode(&self, msg: &[u8], out: &mut [u8], bit_len: usize,
+              rng: &rand::SecureRandom) -> Result<(), error::Unspecified> {
+        debug_assert!(out.len() <= MAX_OUTPUT_LEN);
+
+        let digest_len = self.digest_alg.output_len;
+        let em_len = out.len();
+        assert_eq!(bit_len, em_len * 8);
+
+        // Step 2.
+        let m_hash = digest::digest(self.digest_alg, msg);
+
+        // Step 3: where we assume the digest and salt are of equal length.
+        if em_len < 2 + (2 * digest_len) {
+            return Err(error::Unspecified);
+        }
+
+        // Step 4.
+        let mut salt = [0u8; MAX_SALT_LEN];
+        let salt = &mut salt[..digest_len];
+        try!(rng.fill(salt));
+
+        // Step 5 and 6: compute hash value of:
+        //     (0x)00 00 00 00 00 00 00 00 || m_hash || salt
+        let mut ctx = digest::Context::new(self.digest_alg);
+        ctx.update(&PSS_PREFIX_ZEROS);
+        ctx.update(m_hash.as_ref());
+        ctx.update(salt);
+        let h_hash = ctx.finish();
+
+        // Re-order steps 7,8, 9 and 10 so that we first output the db mask into
+        // the out buffer, and then XOR the value of db.
+
+        // Step 9. First output the mask into the out buffer.
+        let db_len = em_len - digest_len - 1;
+        // let db_mask = &mut out[..db_len];
+        try!(mgf1(self.digest_alg, h_hash.as_ref(), &mut out[..db_len]));
+
+        // Steps 7, 8 and 10: XOR into output the value of db:
+        //     PS || 0x01 || salt
+        // Where PS is all zeros.
+        let pad_len = db_len - digest_len - 1;
+        out[pad_len] ^= 0x01;
+        for i in 0..digest_len {
+            out[pad_len + 1 + i] ^= salt[i];
+        }
+
+        // Step 11.
+        out[0] &= 0x7f;
+
+        // Step 12. Finalise output as:
+        //     masked_db || h_hash || 0xbc
+        out[db_len..][..digest_len].copy_from_slice(h_hash.as_ref());
+        out[db_len + digest_len] = 0xbc;
+
+        Ok(())
+    }
+}
 
 impl Verification for PSS {
     // PSS verification as specified in
