@@ -12,7 +12,7 @@
 // OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 // CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-/// RSA PKCS#1 1.5 signatures.
+/// RSA signatures.
 
 use {c, core, der, error};
 use untrusted;
@@ -20,7 +20,10 @@ use untrusted;
 mod padding;
 
 // `RSA_PKCS1_SHA1` is intentionally not exposed.
-pub use self::padding::{RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512};
+pub use self::padding::{
+    RSA_PKCS1_SHA256, RSA_PKCS1_SHA384, RSA_PKCS1_SHA512,
+    RSA_PSS_SHA256, RSA_PSS_SHA384, RSA_PSS_SHA512,
+};
 
 
 /// Parameters for RSA verification.
@@ -43,6 +46,7 @@ fn parse_public_key(input: untrusted::Input)
 
 struct PositiveInteger {
     value: Option<*mut BIGNUM>,
+    bit_len: usize,
 }
 
 #[allow(unsafe_code)]
@@ -63,9 +67,11 @@ impl PositiveInteger {
         }
         // Reject leading zeros. Also reject the value zero ([0]) because zero
         // isn't positive.
-        if untrusted::Reader::new(input).peek(0) {
+        let top_byte =  try!(untrusted::Reader::new(input).read_byte());
+        if top_byte == 0 {
             return Err(error::Unspecified);
         }
+        let bit_len = input.len() * 8 - top_byte.leading_zeros() as usize;
         let res = unsafe {
             GFp_BN_bin2bn(input.as_slice_less_safe().as_ptr(),
                           input.len(),
@@ -74,7 +80,7 @@ impl PositiveInteger {
         if res.is_null() {
             return Err(error::Unspecified);
         }
-        Ok(PositiveInteger { value: Some(res) })
+        Ok(PositiveInteger { value: Some(res), bit_len: bit_len })
     }
 
     unsafe fn as_ref<'a>(&'a self) -> &'a BIGNUM { &*self.value.unwrap() }

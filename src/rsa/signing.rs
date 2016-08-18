@@ -14,8 +14,6 @@
 
 #![allow(unsafe_code)]
 
-/// RSA PKCS#1 1.5 signatures.
-
 use {bssl, c, der, error};
 use rand;
 use std;

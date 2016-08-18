@@ -14,8 +14,6 @@
 
 #![allow(unsafe_code)]
 
-/// RSA PKCS#1 1.5 signatures.
-
 use {bssl, c, error, private, signature};
 use super::{BIGNUM, PositiveInteger, RSAParameters, parse_public_key};
 use untrusted;
@@ -32,7 +30,7 @@ impl signature::VerificationAlgorithm for RSAParameters {
 
 impl private::Private for RSAParameters {}
 
-macro_rules! rsa_pkcs1 {
+macro_rules! rsa_params {
     ( $VERIFY_ALGORITHM:ident, $min_bits:expr, $PADDING_ALGORITHM:expr,
       $doc_str:expr ) => {
         #[doc=$doc_str]
@@ -46,21 +44,32 @@ macro_rules! rsa_pkcs1 {
     }
 }
 
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA1, 2048, &super::padding::RSA_PKCS1_SHA1,
-           "Verification of signatures using RSA keys of 2048-8192 bits,
-            PKCS#1.5 padding, and SHA-1.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA256, 2048, &super::RSA_PKCS1_SHA256,
-           "Verification of signatures using RSA keys of 2048-8192 bits,
-            PKCS#1.5 padding, and SHA-256.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA384, 2048, &super::RSA_PKCS1_SHA384,
-           "Verification of signatures using RSA keys of 2048-8192 bits,
-            PKCS#1.5 padding, and SHA-384.");
-rsa_pkcs1!(RSA_PKCS1_2048_8192_SHA512, 2048, &super::RSA_PKCS1_SHA512,
-           "Verification of signatures using RSA keys of 2048-8192 bits,
-            PKCS#1.5 padding, and SHA-512.");
-rsa_pkcs1!(RSA_PKCS1_3072_8192_SHA384, 3072, &super::RSA_PKCS1_SHA384,
-           "Verification of signatures using RSA keys of 3072-8192 bits,
-            PKCS#1.5 padding, and SHA-384.");
+rsa_params!(RSA_PKCS1_2048_8192_SHA1, 2048, &super::padding::RSA_PKCS1_SHA1,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PKCS#1.5 padding, and SHA-1.");
+rsa_params!(RSA_PKCS1_2048_8192_SHA256, 2048, &super::RSA_PKCS1_SHA256,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PKCS#1.5 padding, and SHA-256.");
+rsa_params!(RSA_PKCS1_2048_8192_SHA384, 2048, &super::RSA_PKCS1_SHA384,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PKCS#1.5 padding, and SHA-384.");
+rsa_params!(RSA_PKCS1_2048_8192_SHA512, 2048, &super::RSA_PKCS1_SHA512,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PKCS#1.5 padding, and SHA-512.");
+rsa_params!(RSA_PKCS1_3072_8192_SHA384, 3072, &super::RSA_PKCS1_SHA384,
+            "Verification of signatures using RSA keys of 3072-8192 bits,
+             PKCS#1.5 padding, and SHA-384.");
+
+rsa_params!(RSA_PSS_2048_8192_SHA256, 2048, &super::RSA_PSS_SHA256,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PSS padding, and SHA-256.");
+rsa_params!(RSA_PSS_2048_8192_SHA384, 2048, &super::RSA_PSS_SHA384,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PSS padding, and SHA-384.");
+rsa_params!(RSA_PSS_2048_8192_SHA512, 2048, &super::RSA_PSS_SHA512,
+            "Verification of signatures using RSA keys of 2048-8192 bits,
+             PSS padding, and SHA-512.");
+
 
 /// Lower-level API for the verification of RSA signatures.
 ///
@@ -108,7 +117,7 @@ pub fn verify_rsa(params: &RSAParameters,
                                params.min_bits, MAX_BITS)
     }));
 
-    params.padding_alg.verify(msg, untrusted::Input::from(decoded))
+    params.padding_alg.verify(msg, untrusted::Input::from(decoded), n.bit_len)
 }
 
 extern {
@@ -144,6 +153,50 @@ mod tests {
                 &RSA_PKCS1_2048_8192_SHA512
             } else {
                 panic!("Unsupported digest: {}", digest_name);
+            };
+
+            let public_key = test_case.consume_bytes("Key");
+            let public_key = untrusted::Input::from(&public_key);
+
+            // Sanity check that we correctly DER-encoded the originally-
+            // provided separate (n, e) components. When we add test vectors
+            // for improperly-encoded signatures, we'll have to revisit this.
+            assert!(public_key.read_all(error::Unspecified, |input| {
+                der::nested(input, der::Tag::Sequence, error::Unspecified,
+                            |input| {
+                    let _ = try!(der::positive_integer(input));
+                    let _ = try!(der::positive_integer(input));
+                    Ok(())
+                })
+            }).is_ok());
+
+            let msg = test_case.consume_bytes("Msg");
+            let msg = untrusted::Input::from(&msg);
+
+            let sig = test_case.consume_bytes("Sig");
+            let sig = untrusted::Input::from(&sig);
+
+            let expected_result = test_case.consume_string("Result");
+
+            let actual_result = signature::verify(alg, public_key, msg, sig);
+            assert_eq!(actual_result.is_ok(), expected_result == "P");
+
+            Ok(())
+        });
+    }
+
+    #[test]
+    fn test_signature_rsa_pss_verify() {
+        test::from_file("src/rsa/rsa_pss_verify_tests.txt",
+                        |section, test_case| {
+            assert_eq!(section, "");
+
+            let digest_name = test_case.consume_string("Digest");
+            let alg = match digest_name.as_ref() {
+                "SHA256" => &RSA_PSS_2048_8192_SHA256,
+                "SHA384" => &RSA_PSS_2048_8192_SHA384,
+                "SHA512" => &RSA_PSS_2048_8192_SHA512,
+                _ =>  { panic!("Unsupported digest: {}", digest_name) }
             };
 
             let public_key = test_case.consume_bytes("Key");

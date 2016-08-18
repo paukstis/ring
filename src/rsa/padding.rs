@@ -12,7 +12,7 @@
 // OF CONTRACT, NEGLIGENCE OR OTHER TORTIOUS ACTION, ARISING OUT OF OR IN
 // CONNECTION WITH THE USE OR PERFORMANCE OF THIS SOFTWARE.
 
-use {der, digest, error};
+use {der, digest, error, polyfill};
 use untrusted;
 
 /// The term "Encoding" comes from RFC 3447.
@@ -24,8 +24,8 @@ pub trait Encoding: Sync {
 
 /// The term "Verification" comes from RFC 3447.
 pub trait Verification: Sync {
-    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
-              -> Result<(), error::Unspecified>;
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input,
+              bit_len: usize) -> Result<(), error::Unspecified>;
 }
 
 pub struct PKCS1 {
@@ -63,8 +63,8 @@ impl Encoding for PKCS1 {
 }
 
 impl Verification for PKCS1 {
-    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input)
-              -> Result<(), error::Unspecified> {
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input,
+              _bit_len: usize) -> Result<(), error::Unspecified> {
         encoded.read_all(error::Unspecified, |decoded| {
             if try!(decoded.read_byte()) != 0 ||
                try!(decoded.read_byte()) != 1 {
@@ -159,3 +159,151 @@ pkcs1_digestinfo_prefix!(
 pkcs1_digestinfo_prefix!(
     SHA512_PKCS1_DIGESTINFO_PREFIX, 64, 9,
     [ 0x60, 0x86, 0x48, 0x01, 0x65, 0x03, 0x04, 0x02, 0x03 ]);
+
+
+/// PSS Padding as described in https://tools.ietf.org/html/rfc3447#section-9.1.
+/// It generates a random salt equal in length to the output of the specified
+/// digest algorithm and uses MGF1 as the mask generating function.
+pub struct PSS {
+    digest_alg: &'static digest::Algorithm,
+}
+
+// The maximum supported output length for PSS padding is equal to the maximum
+// supported RSA modulus length.
+// TODO: Can we avoid requiring this MAX_OUTPUT_LEN buffer?
+const MAX_OUTPUT_LEN: usize = 8192 / 8;
+
+// Fixed prefix used in the computation of PSS encoding and verification.
+const PSS_PREFIX_ZEROS: [u8; 8] = [0u8; 8];
+
+impl Verification for PSS {
+    // PSS verification as specified in
+    // https://tools.ietf.org/html/rfc3447#section-9.1.2
+    fn verify(&self, msg: untrusted::Input, encoded: untrusted::Input,
+              bit_len: usize) -> Result<(), error::Unspecified> {
+        // Number of bytes required for bit_len bits.
+        let em_len = 1 + (bit_len - 1) / 8;
+        assert_eq!(encoded.len(), em_len);
+        // Create a bit mask to match the size of the modulus used.
+        let top_byte_mask = (0xffu16 >> 1 + bit_len % 8) as u8;
+        encoded.read_all(error::Unspecified, |em| {
+            let digest_len = self.digest_alg.output_len;
+
+            // Step 2.
+            let m_hash = digest::digest(self.digest_alg,
+                                        msg.as_slice_less_safe());
+
+            // Step 3: where we assume the digest and salt are of equal length.
+            if em_len < 2 + (2 * digest_len) {
+                return Err(error::Unspecified)
+            }
+
+            // Steps 4 and 5: Parse encoded message as:
+            //     masked_db || h_hash || 0xbc
+            let db_len = em_len - digest_len - 1;
+            let masked_db = try!(em.skip_and_get_input(db_len));
+            let h_hash = try!(em.skip_and_get_input(digest_len));
+            if try!(em.read_byte()) != 0xbc {
+                return Err(error::Unspecified);
+            }
+
+            // Step 7.
+            let mut db = [0u8; MAX_OUTPUT_LEN];
+            let db = &mut db[..db_len];
+
+            try!(mgf1(self.digest_alg, h_hash.as_slice_less_safe(), db));
+
+            try!(masked_db.read_all(error::Unspecified, |masked_bytes| {
+                // Step 6. Check the top bits of first byte are zero.
+                let b = try!(masked_bytes.read_byte());
+                if b & !top_byte_mask != 0 {
+                    return Err(error::Unspecified);
+                }
+                db[0] ^= b;
+
+                // Step 8.
+                for i in 1..db.len() {
+                    db[i] ^= try!(masked_bytes.read_byte());
+                }
+                Ok(())
+            }));
+
+            // Step 9.
+            db[0] &= top_byte_mask;
+
+            // Step 10.
+            let pad_len = db.len() - digest_len - 1;
+            for i in 0..pad_len {
+                if db[i] != 0 {
+                    return Err(error::Unspecified);
+                }
+            }
+            if db[pad_len] != 1 {
+                return Err(error::Unspecified);
+            }
+
+            // Step 11.
+            let salt = &db[db.len() - digest_len..];
+
+            // Step 12 and 13: compute hash value of:
+            //     (0x)00 00 00 00 00 00 00 00 || m_hash || salt
+            let mut ctx = digest::Context::new(self.digest_alg);
+            ctx.update(&PSS_PREFIX_ZEROS);
+            ctx.update(m_hash.as_ref());
+            ctx.update(salt);
+            let h_hash_check = ctx.finish();
+
+            // Step 14.
+            if h_hash != h_hash_check.as_ref() {
+                return Err(error::Unspecified);
+            }
+            Ok(())
+        })
+    }
+}
+
+// Mask-generating function MGF1 as described in
+// https://tools.ietf.org/html/rfc3447#appendix-B.2.1.
+fn mgf1(digest_alg: &'static digest::Algorithm, seed: &[u8], mask: &mut [u8])
+        -> Result<(), error::Unspecified> {
+    let digest_len = digest_alg.output_len;
+
+    // Maximum counter value is the value of (mask_len / digest_len) rounded up.
+    let ctr_max = (mask.len() - 1) / digest_len;
+    assert!(ctr_max <= u32::max_value() as usize);
+    for i in 0..ctr_max {
+        let mut ctx = digest::Context::new(digest_alg);
+        ctx.update(seed);
+        ctx.update(&polyfill::slice::be_u8_from_u32(i as u32));
+        let digest = ctx.finish();
+        mask[i * digest_len..][..digest_len].copy_from_slice(digest.as_ref());
+    }
+
+    // Handle final iteration where we may not need an entire block of output.
+    let last_block_len = mask.len() % digest_len;
+    let mut ctx = digest::Context::new(digest_alg);
+    ctx.update(seed);
+    ctx.update(&polyfill::slice::be_u8_from_u32(ctr_max as u32));
+    let digest = ctx.finish();
+    mask[ctr_max * digest_len..].copy_from_slice(
+        &digest.as_ref()[..last_block_len]);
+
+    Ok(())
+}
+
+macro_rules! rsa_pss_padding {
+    ( $PADDING_ALGORITHM:ident, $digest_alg:expr, $doc_str:expr ) => {
+        #[doc=$doc_str]
+        /// Feature: `rsa_signing`.
+        pub static $PADDING_ALGORITHM: PSS = PSS {
+            digest_alg: $digest_alg,
+        };
+    }
+}
+
+rsa_pss_padding!(RSA_PSS_SHA256, &digest::SHA256,
+                 "PSS padding using SHA-256 for RSA signatures.");
+rsa_pss_padding!(RSA_PSS_SHA384, &digest::SHA384,
+                 "PSS padding using SHA-384 for RSA signatures.");
+rsa_pss_padding!(RSA_PSS_SHA512, &digest::SHA512,
+                 "PSS padding using SHA-512 for RSA signatures.");
