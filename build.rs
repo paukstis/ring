@@ -137,7 +137,7 @@ fn build_c_code(out_dir: &str) -> Result<(), std::env::VarError> {
     // how to do that yet.
     println!("cargo:rustc-link-lib=static={}-test", LIB_NAME);
     if !use_msbuild {
-        println!("cargo:rustc-flags=-l dylib=stdc++");
+        println!("cargo:rustc-flags=-l dylib=c++");
     }
 
     Ok(())
