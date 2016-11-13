@@ -137,7 +137,13 @@ fn build_c_code(out_dir: &str) -> Result<(), std::env::VarError> {
     // how to do that yet.
     println!("cargo:rustc-link-lib=static={}-test", LIB_NAME);
     if !use_msbuild {
-        println!("cargo:rustc-flags=-l dylib=c++");
+        // Clang is default on FreeBSD
+        if target_triple[2].contains("freebsd") {
+            println!("cargo:rustc-flags=-l dylib=c++");
+        }
+        else {
+            println!("cargo:rustc-flags=-l dylib=stdc++");
+        }
     }
 
     Ok(())
